@@ -1,4 +1,4 @@
-# Hashteroids
+# Hashteroids 🕹️
 A Bitcoin themed twist on the classic Asteroids game
 
 Play it at https://hashteroids.btcdir.org
