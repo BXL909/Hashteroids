@@ -841,6 +841,10 @@
         }
 
         function keyDown(ev) {
+            if (ev.keyCode === 32) {
+                ev.preventDefault();
+            }
+
             if (gameOverMessageTime > 0) {
                 return;
             }
@@ -3670,6 +3674,10 @@
         initializeWelcomeAsteroids(0);
 
         document.addEventListener("keydown", (ev) => {
+            if (ev.keyCode === 32) { // spacebar
+                ev.preventDefault();
+            }
+
             if (isWelcomeScreen && ev.keyCode === 32) { 
                 isWelcomeScreen = false;
                 score = 0; 
@@ -4032,7 +4040,7 @@
                 const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
                 const output = noiseBuffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) {
-                    output[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+                    output[i] = (Math.random() *2 - 1) * (1 - i / bufferSize);
                 }
 
                 const noiseSource = audioContext.createBufferSource();
