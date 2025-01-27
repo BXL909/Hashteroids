@@ -7,21 +7,20 @@
         body {
             margin: 0;
             background-color: #050505;
-            background-image: 
-                linear-gradient(rgba(30, 30, 30, 0.25) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(30, 30, 30, 0.25) 1px, transparent 1px);
-            background-size: 40px 40px;
-            animation: gridFloat 4s infinite linear;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             font-family: 'Arial', sans-serif;
             color: rgb(105, 105, 105);
-            a:visited, a:link, a:hover, a:active {
-                color: orange;
-                text-decoration: none;
-            }
+        }
+
+        body.grid-enabled {
+            background-image: 
+                linear-gradient(rgba(30, 30, 30, 0.25) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 30, 30, 0.25) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridFloat 4s infinite linear;
         }
 
         @keyframes gridFloat {
@@ -37,6 +36,11 @@
             border: 1px solid rgb(65, 65, 65);
             transform: translate(0, 0);
         }
+
+        a, a:visited, a:hover, a:active {
+            color: orange;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -46,7 +50,7 @@
         <table style="margin-top: 2px; margin-right: 0px; width: 1500px; height: auto; align-self: flex-end; border-spacing: 0px; font-size: 12px;">
             <tr>
                 <td style="vertical-align: top; text-align: left; width: 50%;">
-                    <p style="margin: 0; text-align: left;">HASHTEROIDS<br>V1.0</p>
+                    <p style="margin: 0; text-align: left;">HASHTEROIDS<br>V1.1</p>
                 </td>
                 <td style="vertical-align: top; text-align: right; width: 50%;">
                     <p style="margin: 0;">COPYLEFT 2024 ALL RIGHTS REVERSED <br> BLOCK HEIGHT: <span id="blockHeight">Loading...</span> | <a target="_new" href="https://bxl909.github.io/">BXL909</a></p>
@@ -110,13 +114,38 @@
         const LASER_SPEED = 500;
         const LASER_DIST = 0.5;
         const GAME_LIVES = 3;
-        const EXPLOSION_PARTICLES = 20;
-        const EXPLOSION_PIXELS = 120;
-        const STARS_NUM = 200; 
-        const STARS_SPEED_MULT = 0.3; 
-        const NEBULA_CLOUDS = 6; 
-        const NEBULA_SPEED_MULT = 0.1;
-        const TRAIL_MAX_POINTS = 600; 
+        const EXPLOSION_PARTICLES_HIGH = 20;
+        const EXPLOSION_PARTICLES_LOW = 6;
+        const EXPLOSION_PIXELS_HIGH = 120;
+        const EXPLOSION_PIXELS_LOW = 40;
+        const TRAIL_MAX_POINTS_HIGH = 600;
+        const TRAIL_MAX_POINTS_LOW = 110;
+        const NEBULA_CLOUDS_HIGH = 6;
+        const NEBULA_CLOUDS_LOW = 0;
+        const STARS_NUM_HIGH = 200;
+        const STARS_NUM_LOW = 30;
+        const STAR_LAYERS_HIGH = 3;
+        const STAR_LAYERS_LOW = 2;
+        const STARS_PER_LAYER_HIGH = 70;
+        const STARS_PER_LAYER_LOW = 15;
+        const STARS_SPEED_MULT_HIGH = 0.3;
+        const STARS_SPEED_MULT_LOW = 0.15;
+        const NEBULA_SPEED_MULT_HIGH = 0.1;
+        const NEBULA_SPEED_MULT_LOW = 0.05;
+        const PERFORMANCE_MODE_KEY = 'hashteroidsPerformanceMode';
+
+        let isPerformanceMode = localStorage.getItem(PERFORMANCE_MODE_KEY) === 'true';
+
+        const EXPLOSION_PARTICLES = isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH;
+        const EXPLOSION_PIXELS = isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH;
+        const TRAIL_MAX_POINTS = isPerformanceMode ? TRAIL_MAX_POINTS_LOW : TRAIL_MAX_POINTS_HIGH;
+        const NEBULA_CLOUDS = isPerformanceMode ? NEBULA_CLOUDS_LOW : NEBULA_CLOUDS_HIGH;
+        const STARS_NUM = isPerformanceMode ? STARS_NUM_LOW : STARS_NUM_HIGH;
+        const STAR_LAYERS = isPerformanceMode ? STAR_LAYERS_LOW : STAR_LAYERS_HIGH;
+        const STARS_PER_LAYER = isPerformanceMode ? STARS_PER_LAYER_LOW : STARS_PER_LAYER_HIGH;
+        const STARS_SPEED_MULT = isPerformanceMode ? STARS_SPEED_MULT_LOW : STARS_SPEED_MULT_HIGH;
+        const NEBULA_SPEED_MULT = isPerformanceMode ? NEBULA_SPEED_MULT_LOW : NEBULA_SPEED_MULT_HIGH;
+
         const STARTING_ASTEROIDS = 3; 
         const SCORE_LARGE_ASTEROID = 5000;
         const SCORE_MEDIUM_ASTEROID = 10000; 
@@ -138,8 +167,6 @@
         const MONSTER_HEALTH_BAR_WIDTH = 100;
         const MONSTER_HEALTH_BAR_HEIGHT = 10;
         const SPECIAL_LEVEL_MESSAGE_DURATION = 180; 
-        const STAR_LAYERS = 3;
-        const STARS_PER_LAYER = 70;
         const THRUSTER_FLICKER_SPEED = 0.3;
         const ENEMY_SHIP_SIZE = 20; 
         const ENEMY_SHIP_SPEED = 2;
@@ -217,20 +244,28 @@
             active: false
         };
 
-        let starLayers = [];
-        for (let layer = 0; layer < STAR_LAYERS; layer++) {
-            let stars = [];
-            for (let i = 0; i < STARS_PER_LAYER; i++) {
-                stars.push({
-                    x: Math.random() * canv.width,
-                    y: Math.random() * canv.height,
-                    size: Math.random() * (0.5 + layer * 0.5) + 0.5,
-                    twinkle: Math.random() * Math.PI,
-                    twinkleSpeed: 0.02 + Math.random() * 0.03
-                });
+        function createStarLayers() {
+            let newStarLayers = [];
+            const layerCount = isPerformanceMode ? STAR_LAYERS_LOW : STAR_LAYERS_HIGH;
+            const starsPerLayer = isPerformanceMode ? STARS_PER_LAYER_LOW : STARS_PER_LAYER_HIGH;
+            
+            for (let layer = 0; layer < layerCount; layer++) {
+                let stars = [];
+                for (let i = 0; i < starsPerLayer; i++) {
+                    stars.push({
+                        x: Math.random() * canv.width,
+                        y: Math.random() * canv.height,
+                        size: Math.random() * (0.5 + layer * 0.5) + 0.5,
+                        twinkle: Math.random() * Math.PI,
+                        twinkleSpeed: 0.02 + Math.random() * 0.03
+                    });
+                }
+                newStarLayers.push(stars);
             }
-            starLayers.push(stars);
+            return newStarLayers;
         }
+
+        let starLayers = createStarLayers();
 
         let nebulaClouds = [];
         for (let i = 0; i < NEBULA_CLOUDS; i++) {
@@ -528,8 +563,12 @@
             
             let particles = [];
             let isMonster = radius === MONSTER_ASTEROID_SIZE;
-            let particleCount = isMonster ? EXPLOSION_PARTICLES * 4 : EXPLOSION_PARTICLES;
-            let pixelCount = isMonster ? EXPLOSION_PIXELS * 4 : EXPLOSION_PIXELS;
+            let particleCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH);
+            let pixelCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH);
             
             for (let i = 0; i < particleCount; i++) {
                 let angle = (i * Math.PI * 2) / particleCount;
@@ -1050,8 +1089,1064 @@
             
             let particles = [];
             let isMonster = radius === MONSTER_ASTEROID_SIZE;
-            let particleCount = isMonster ? EXPLOSION_PARTICLES * 4 : EXPLOSION_PARTICLES;
-            let pixelCount = isMonster ? EXPLOSION_PIXELS * 4 : EXPLOSION_PIXELS;
+            let particleCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH);
+            let pixelCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH);
+            
+            for (let i = 0; i < particleCount; i++) {
+                let angle = (i * Math.PI * 2) / particleCount;
+                particles.push({
+                    x: x,
+                    y: y,
+                    xv: (Math.random() * 2 - 1) * (velocity.x + 2),
+                    yv: (Math.random() * 2 - 1) * (velocity.y + 2),
+                    rot: Math.random() * Math.PI * 2,
+                    size: radius * (isMonster ? 0.15 : 0.3) * (Math.random() * 0.5 + 0.5),
+                    decay: isMonster ? 0.99 : 0.997,
+                    isPixel: false
+                });
+            }
+            
+            for (let i =0; i < pixelCount; i++) {
+                let speed = Math.random() * (isMonster ? 3.5 : 2.5) + 0.3;
+                let angle = Math.random() * Math.PI * 2;
+                particles.push({
+                    x: x,
+                    y: y,
+                    xv: speed * Math.cos(angle),
+                    yv: speed * Math.sin(angle),
+                    rot: 0,
+                    size: 1,
+                    decay: 0.995,
+                    alpha: 1.0,
+                    isPixel: true
+                });
+            }
+            
+            return particles;
+        }
+
+        requestAnimationFrame(gameLoop);
+
+        document.addEventListener("keydown", keyDown);
+        document.addEventListener("keyup", keyUp);
+
+        function createEnemyShip() {
+            let side = Math.floor(Math.random() * 4); 
+            let x, y;
+            
+            switch(side) {
+                case 0: // top
+                    x = Math.random() * canv.width;
+                    y = -ENEMY_SHIP_SIZE;
+                    break;
+                case 1: // right
+                    x = canv.width + ENEMY_SHIP_SIZE;
+                    y = Math.random() * canv.height;
+                    break;
+                case 2: // bottom
+                    x = Math.random() * canv.width;
+                    y = canv.height + ENEMY_SHIP_SIZE;
+                    break;
+                default: // left
+                    x = -ENEMY_SHIP_SIZE;
+                    y = Math.random() * canv.height;
+                    break;
+            }
+
+            const enemyType = Math.random() < 0.5 ? 'classic' : 'saucer';
+
+            enemyShip = {
+                x: x,
+                y: y,
+                radius: ENEMY_SHIP_SIZE / 2,
+                angle: Math.random() * Math.PI * 2,
+                rotation: ENEMY_ROTATION_SPEED * (Math.random() < 0.5 ? 1 : -1),
+                thrust: { x: 0, y: 0 }, 
+                lasers: [],
+                lastShotTime: Date.now(),
+                dead: false,
+                type: enemyType,
+                oscillateOffset: 0,
+                oscillateSpeed: 0.05
+            };
+        }
+
+        function createAsteroidBelt() {
+            if (level > 1) { 
+                createLevelAnnouncementSound();
+            }
+            
+            asteroids = [];
+            isSpecialLevel = false;
+            specialLevelType = null;
+            
+            laserGrid.active = false;
+            laserGrid.beams = [];
+            laserGrid.angle = 0;
+
+            enemyShip = null; 
+
+            ship.invincible = true;
+            ship.invincibleEndTime = Date.now() + SPAWN_PROTECTION_TIME;
+
+            if (level > 1) {
+                let malfunctionRisk = MALFUNCTION_BASE_CHANCE + (0.01 * (level - 1));
+                
+                let roll = Math.random();
+                
+                if (roll < malfunctionRisk) {
+                    const malfunctionTypes = Object.values(MALFUNCTION_TYPES);
+                    const randomType = malfunctionTypes[Math.floor(Math.random() * malfunctionTypes.length)];
+                    currentMalfunctions.add(randomType.id);
+                    malfunctionMessageTime = MALFUNCTION_MESSAGE_DURATION * FPS;
+                    ship.faultsOccurred++;
+                }
+            }
+
+            if (typeof level !== 'number' || level < 1) {
+                level = 1;
+            }
+
+            let numAsteroids = level + 2; 
+
+            if (level >= 2 && level % SPECIAL_LEVEL_INTERVAL === 0) {
+                isSpecialLevel = true;
+                specialLevelType = SPECIAL_LEVEL_TYPES[Math.floor(Math.random() * SPECIAL_LEVEL_TYPES.length)];
+                specialLevelMessageTime = SPECIAL_LEVEL_MESSAGE_DURATION;
+
+                if (specialLevelType === 'MONSTER_ASTEROID') {
+                    let x, y;
+                    let spawnAttempts = 0;
+                    const MAX_SPAWN_ATTEMPTS = 10;
+                    
+                    do {
+                        x = canv.width * (0.25 + Math.random() * 0.5);
+                        y = canv.height * (0.25 + Math.random() *0.5);
+                        spawnAttempts++;
+                        
+                        if (spawnAttempts >= MAX_SPAWN_ATTEMPTS) {
+                            x = canv.width / 2;
+                            y = canv.height /2;
+                            break;
+                        }
+                    } while (distBetweenPoints(ship.x, ship.y, x, y) < MONSTER_ASTEROID_SIZE * 2);
+                    
+                    let monsterAsteroid = newAsteroid(x, y, MONSTER_ASTEROID_SIZE);
+                    if (!monsterAsteroid) {
+                        throw new Error('Monster asteroid creation failed');
+                    }
+                    
+                    monsterAsteroid.health = MONSTER_ASTEROID_HEALTH;
+                    if (!monsterAsteroid.offsets || monsterAsteroid.offsets.length === 0) {
+                        monsterAsteroid.offsets = Array(ASTEROID_VERTICES * 2).fill(0.95); 
+                    }
+                    
+                    asteroids.push(monsterAsteroid);
+
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let asteroidX, asteroidY;
+                        spawnAttempts = 0;
+                        
+                        do {
+                            asteroidX = Math.random() * canv.width;
+                            asteroidY = Math.random() * canv.height;
+                            spawnAttempts++;
+                            
+                            if (spawnAttempts >= MAX_SPAWN_ATTEMPTS) {
+                                asteroidX = Math.random() < 0.5 ? ASTEROID_SIZE : canv.width - ASTEROID_SIZE;
+                                asteroidY = Math.random() < 0.5 ? ASTEROID_SIZE : canv.height - ASTEROID_SIZE;
+                                break;
+                            }
+                        } while (
+                            distBetweenPoints(ship.x, ship.y, asteroidX, asteroidY) < ASTEROID_SIZE * 2 ||
+                            distBetweenPoints(x, y, asteroidX, asteroidY) < MONSTER_ASTEROID_SIZE * 1.5
+                        );
+                        
+                        asteroids.push(newAsteroid(asteroidX, asteroidY, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else if (specialLevelType === 'BLACK_HOLE') {
+                    let blackHole = {
+                        x: Math.random() * (canv.width - 200) + 100, 
+                        y: Math.random() * (canv.height - 200) + 100,
+                        particles: [],
+                        outerParticles: [],
+                        angle: 0,
+                        rotationSpeed: 0.001
+                    };
+
+                    for (let i = 0; i < BLACK_HOLE_PARTICLES; i++) {
+                        blackHole.particles.push({
+                            distance: Math.random() * BLACK_HOLE_RADIUS * 2 + BLACK_HOLE_RADIUS,
+                            angle: Math.random() * Math.PI * 2,
+                            speed: Math.random() * BLACK_HOLE_PARTICLE_SPEED + 1,
+                            size: Math.random() * 2 + 1
+                        });
+                    }
+
+                    const OUTER_PARTICLES = 200;
+                    for (let i = 0; i < OUTER_PARTICLES; i++) {
+                        blackHole.outerParticles.push({
+                            distance: BLACK_HOLE_PULL_RADIUS * (0.3 + Math.random() * 0.7),
+                            angle: Math.random() * Math.PI * 2,
+                            baseSpeed: 0.02 + Math.random() * 0.04,
+                            size: 1.5 + Math.random() * 2.5,
+                            alpha: 0.4 + Math.random() * 0.4,
+                            direction: Math.random() < 0.5 ? 1 : -1
+                        });
+                    }
+
+                    window.blackHole = blackHole;
+                    
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let x, y;
+                        do {
+                            x = Math.random() * canv.width;
+                            y = Math.random() * canv.height;
+                        } while (distBetweenPoints(x, y, blackHole.x, blackHole.y) < BLACK_HOLE_RADIUS * 4);
+                        
+                        asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else if (specialLevelType === 'LASER_GRID') {
+                    laserGrid.active = true;
+                    laserGrid.angle = 0;
+                    laserGrid.beams = [];
+                    
+                    for (let i = 0; i < LASER_GRID_BEAMS; i++) {
+                        laserGrid.beams.push({
+                            angle: (i * Math.PI * 2) / LASER_GRID_BEAMS
+                        });
+                    }
+                    
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let x = Math.random() * canv.width;
+                        let y = Math.random() * canv.height;
+                        asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else {
+                    laserGrid.active = false;
+                }
+            } else {
+                let createdAsteroids = 0;
+                let attempts = 0;
+                const MAX_ATTEMPTS = 20;
+
+                while (createdAsteroids < numAsteroids && attempts < MAX_ATTEMPTS) {
+                    let x, y;
+                    do {
+                        x = Math.floor(Math.random() * canv.width);
+                        y = Math.floor(Math.random() * canv.height);
+                        attempts++;
+                    } while (distBetweenPoints(ship.x, ship.y, x, y) < ASTEROID_SIZE * 2 + ship.radius && 
+                            attempts < MAX_ATTEMPTS);
+
+                    let asteroid = newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2));
+                    if (asteroid) {
+                        asteroids.push(asteroid);
+                        createdAsteroids++;
+                    }
+                }
+            }
+        
+            if (asteroids.length === 0) {
+                level++;
+                levelMessageTime = LEVEL_MESSAGE_DURATION;
+                createAsteroidBelt();
+            }
+
+            if (level % 2 === 1) { 
+                enemyShipSpawnTime = Date.now() + 
+                    ENEMY_SPAWN_MIN_DELAY + 
+                    Math.random() * (ENEMY_SPAWN_MAX_DELAY - ENEMY_SPAWN_MIN_DELAY);
+            } else {
+                enemyShipSpawnTime = 0; 
+                enemyShip = null; 
+            }
+
+            if (Math.random() < 0.5) {
+                createBitcoinToken();
+            }
+        }
+
+        function distBetweenPoints(x1, y1, x2, y2) {
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
+
+        function newAsteroid(x, y, r) {
+            let speedMultiplier = r === MONSTER_ASTEROID_SIZE ? 0.15 : 1;
+            let vertexCount = r === MONSTER_ASTEROID_SIZE ? 
+                ASTEROID_VERTICES * 2 : 
+                Math.floor(Math.random() * (ASTEROID_VERTICES + 1) + ASTEROID_VERTICES / 2);
+            
+            let asteroid = {
+                x: x,
+                y: y,
+                xv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1) * speedMultiplier,
+                yv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1) * speedMultiplier,
+                radius: r,
+                angle: Math.random() * Math.PI * 2,
+                vertices: vertexCount,
+                offsets: [],
+                rot: (Math.random() * 0.2 - 0.1) * Math.PI / FPS * (r === MONSTER_ASTEROID_SIZE ? 0.3 : 1),
+                health: r === MONSTER_ASTEROID_SIZE ? MONSTER_ASTEROID_HEALTH : undefined
+            };
+
+            for (let i = 0; i < asteroid.vertices; i++) {
+                if (r === MONSTER_ASTEROID_SIZE) {
+                    asteroid.offsets.push(0.9 + Math.random() * 0.1); 
+                } else {
+                    asteroid.offsets.push(Math.random() * 0.5 + 0.5);
+                }
+            }
+
+            return asteroid;
+        }
+
+        function keyDown(ev) {
+            if (ev.keyCode === 32) {
+                ev.preventDefault();
+            }
+
+            if (gameOverMessageTime > 0) {
+                return;
+            }
+
+            if (ev.keyCode === 80) { 
+                isPaused = !isPaused;
+                pauseOverlay.targetAlpha = isPaused ? 0.5 : 0;
+                if (isPaused) {
+                    stopThrustSound();
+                }
+                return;
+            }
+
+            if (isPaused) {
+                return;
+            }
+
+            if (ship.dead && ship.explodeTime === 0) {
+                if (ev.keyCode === 32) { 
+                    level = 1;
+                    score = 0;
+                    currentMalfunctions.clear(); 
+                    ship = {
+                        x: canv.width / 2,
+                        y: canv.height / 2,
+                        radius: SHIP_SIZE / 2,
+                        angle: 90 / 180 * Math.PI,
+                        rotation: 0,
+                        thrusting: false,
+                        thrust: {
+                            x: 0,
+                            y: 0
+                        },
+                        explodeTime: 0,
+                        dead: false,
+                        lives: GAME_LIVES,
+                        particles: [],
+                        lasers: [],
+                        canShoot: true,
+                        trailPoints: [],
+                        distanceTravelled: 0,
+                        clockwiseRotations: 0,
+                        anticlockwiseRotations: 0,
+                        lastAngle: 90 / 180 * Math.PI,
+                        prevX: canv.width / 2,
+                        prevY: canv.height / 2,
+                        renderX: canv.width / 2,
+                        renderY: canv.height / 2,
+                        thrusterFlicker: 0,
+                        thrusterParticles: [],
+                        invincible: false,
+                        invincibleEndTime: 0,
+                        activePowerUps: new Map(), 
+                        powerUpMessageTime: 0,
+                        lastPowerUp: null,
+                        targetsHit: 0,
+                        bitcoinsCollected: 0,
+                        powerupsCollected: 0,
+                        faultsOccurred: 0,
+                        enemyShipsDestroyed: 0,
+                        respawnEffect: 0,
+                        shotsFired: 0,
+                        repairsCollected: 0,
+                        highestVelocity: 0,
+                    };
+                    createAsteroidBelt();
+                    return;
+                }
+            }
+
+            if (ship.explodeTime > 0) {
+                return;
+            }
+
+            switch(ev.keyCode) {
+                case 32: 
+                    if (currentMalfunctions.has('fire')) {
+                        let currentTime = Date.now();
+                        if (currentTime - lastShotTime < 1000) {
+                            return;
+                        }
+                        lastShotTime = currentTime;
+                    }
+                    shootLaser();
+                    break;
+                case 37: 
+                    let rotationSpeed = TURN_SPEED;
+                    if (currentMalfunctions.has('control')) {
+                        rotationSpeed *= 0.5;
+                    }
+                    ship.rotation = rotationSpeed / 180 * Math.PI / FPS * 
+                        (currentMalfunctions.has('rotation') ? -1 : 1);
+                    break;
+                case 38: 
+                    if (!isWelcomeScreen) {  
+                        if (!ship.thrusting) {
+                            createThrustSound(); 
+                            startThrustSound();  
+                        }
+                        ship.thrusting = true;
+                    }
+                    break;
+                case 39: 
+                    let rotationSpeed2 = TURN_SPEED;
+                    if (currentMalfunctions.has('control')) {
+                        rotationSpeed2 *= 0.5;
+                    }
+                    ship.rotation = -rotationSpeed2 / 180 * Math.PI / FPS * 
+                        (currentMalfunctions.has('rotation') ? -1 : 1);
+                    break;
+            }
+        }
+
+        function keyUp(ev) {
+            if (ship.explodeTime > 0) {
+                return;
+            }
+
+            switch(ev.keyCode) {
+                case 32: // space bar 
+                    ship.canShoot = true;
+                    break;
+                case 37: // left arrow
+                    ship.rotation = 0;
+                    break;
+                case 38: // up arrow 
+                    ship.thrusting = false;
+                    stopThrustSound(); 
+                    break;
+                case 39: // right arrow 
+                    ship.rotation = 0;
+                    break;
+            }
+        }
+
+        function shootLaser() {
+            if (ship.canShoot && ship.lasers.length < LASER_MAX) {
+                createLaserSound();
+                ship.shotsFired++;
+
+                const now = Date.now();
+                const hasRearLaser = ship.activePowerUps.get(POWER_UP_TYPES.REAR_LASER.id) > now;
+                const hasSpreadShot = ship.activePowerUps.get(POWER_UP_TYPES.SPREAD_SHOT.id) > now;
+                const hasLaserBurst = ship.activePowerUps.get(POWER_UP_TYPES.LASER_BURST.id) > now;
+
+                const baseLaser = {
+                    x: ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
+                    y: ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle),
+                    xv: LASER_SPEED * Math.cos(ship.angle) / FPS,
+                    yv: -LASER_SPEED * Math.sin(ship.angle) / FPS,
+                    dist: 0,
+                    explodeTime: 0
+                };
+
+                ship.lasers.push({...baseLaser});
+
+                if (hasRearLaser) {
+                    ship.lasers.push({
+                        x: ship.x - 4 / 3 * ship.radius * Math.cos(ship.angle),
+                        y: ship.y + 4 / 3 * ship.radius * Math.sin(ship.angle),
+                        xv: -LASER_SPEED * Math.cos(ship.angle) / FPS,
+                        yv: LASER_SPEED * Math.sin(ship.angle) / FPS,
+                        dist: 0,
+                        explodeTime: 0
+                    });
+                }
+
+                if (hasSpreadShot) {
+                    const spreadAngles = [-0.2, 0.2];
+                    spreadAngles.forEach(angleOffset => {
+                        ship.lasers.push({
+                            ...baseLaser,
+                            xv: LASER_SPEED * Math.cos(ship.angle + angleOffset) / FPS,
+                            yv: -LASER_SPEED * Math.sin(ship.angle + angleOffset) / FPS
+                        });
+                    });
+                }
+
+                if (hasLaserBurst) {
+                    const BURST_COUNT = 64; 
+                    for (let i = 0; i < BURST_COUNT; i++) {
+                        const burstAngle = (i * Math.PI * 2) / BURST_COUNT;
+                        ship.lasers.push({
+                            x: ship.x,
+                            y: ship.y,
+                            xv: LASER_SPEED * Math.cos(burstAngle) / FPS,
+                            yv: -LASER_SPEED * Math.sin(burstAngle) / FPS,
+                            dist: 200,
+                            explodeTime: 0
+                        });
+                    }
+                }
+
+                ship.canShoot = false;
+                setTimeout(() => {
+                    ship.canShoot = true;
+                }, 25);
+            }
+        }
+
+        function createExplosion(x, y, radius, color, velocity = { x: 0, y: 0 }) {
+            createExplosionSound(radius);
+            
+            let particles = [];
+            let isMonster = radius === MONSTER_ASTEROID_SIZE;
+            let particleCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH);
+            let pixelCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH);
+            
+            for (let i = 0; i < particleCount; i++) {
+                let angle = (i * Math.PI * 2) / particleCount;
+                particles.push({
+                    x: x,
+                    y: y,
+                    xv: (Math.random() * 2 - 1) * (velocity.x + 2),
+                    yv: (Math.random() * 2 - 1) * (velocity.y + 2),
+                    rot: Math.random() * Math.PI * 2,
+                    size: radius * (isMonster ? 0.15 : 0.3) * (Math.random() * 0.5 + 0.5),
+                    decay: isMonster ? 0.99 : 0.997,
+                    isPixel: false
+                });
+            }
+            
+            for (let i =0; i < pixelCount; i++) {
+                let speed = Math.random() * (isMonster ? 3.5 : 2.5) + 0.3;
+                let angle = Math.random() * Math.PI * 2;
+                particles.push({
+                    x: x,
+                    y: y,
+                    xv: speed * Math.cos(angle),
+                    yv: speed * Math.sin(angle),
+                    rot: 0,
+                    size: 1,
+                    decay: 0.995,
+                    alpha: 1.0,
+                    isPixel: true
+                });
+            }
+            
+            return particles;
+        }
+
+        requestAnimationFrame(gameLoop);
+
+        document.addEventListener("keydown", keyDown);
+        document.addEventListener("keyup", keyUp);
+
+        function createEnemyShip() {
+            let side = Math.floor(Math.random() * 4); 
+            let x, y;
+            
+            switch(side) {
+                case 0: // top
+                    x = Math.random() * canv.width;
+                    y = -ENEMY_SHIP_SIZE;
+                    break;
+                case 1: // right
+                    x = canv.width + ENEMY_SHIP_SIZE;
+                    y = Math.random() * canv.height;
+                    break;
+                case 2: // bottom
+                    x = Math.random() * canv.width;
+                    y = canv.height + ENEMY_SHIP_SIZE;
+                    break;
+                default: // left
+                    x = -ENEMY_SHIP_SIZE;
+                    y = Math.random() * canv.height;
+                    break;
+            }
+
+            const enemyType = Math.random() < 0.5 ? 'classic' : 'saucer';
+
+            enemyShip = {
+                x: x,
+                y: y,
+                radius: ENEMY_SHIP_SIZE / 2,
+                angle: Math.random() * Math.PI * 2,
+                rotation: ENEMY_ROTATION_SPEED * (Math.random() < 0.5 ? 1 : -1),
+                thrust: { x: 0, y: 0 }, 
+                lasers: [],
+                lastShotTime: Date.now(),
+                dead: false,
+                type: enemyType,
+                oscillateOffset: 0,
+                oscillateSpeed: 0.05
+            };
+        }
+
+        function createAsteroidBelt() {
+            if (level > 1) { 
+                createLevelAnnouncementSound();
+            }
+            
+            asteroids = [];
+            isSpecialLevel = false;
+            specialLevelType = null;
+            
+            laserGrid.active = false;
+            laserGrid.beams = [];
+            laserGrid.angle = 0;
+
+            enemyShip = null; 
+
+            ship.invincible = true;
+            ship.invincibleEndTime = Date.now() + SPAWN_PROTECTION_TIME;
+
+            if (level > 1) {
+                let malfunctionRisk = MALFUNCTION_BASE_CHANCE + (0.01 * (level - 1));
+                
+                let roll = Math.random();
+                
+                if (roll < malfunctionRisk) {
+                    const malfunctionTypes = Object.values(MALFUNCTION_TYPES);
+                    const randomType = malfunctionTypes[Math.floor(Math.random() * malfunctionTypes.length)];
+                    currentMalfunctions.add(randomType.id);
+                    malfunctionMessageTime = MALFUNCTION_MESSAGE_DURATION * FPS;
+                    ship.faultsOccurred++;
+                }
+            }
+
+            if (typeof level !== 'number' || level < 1) {
+                level = 1;
+            }
+
+            let numAsteroids = level + 2; 
+
+            if (level >= 2 && level % SPECIAL_LEVEL_INTERVAL === 0) {
+                isSpecialLevel = true;
+                specialLevelType = SPECIAL_LEVEL_TYPES[Math.floor(Math.random() * SPECIAL_LEVEL_TYPES.length)];
+                specialLevelMessageTime = SPECIAL_LEVEL_MESSAGE_DURATION;
+
+                if (specialLevelType === 'MONSTER_ASTEROID') {
+                    let x, y;
+                    let spawnAttempts = 0;
+                    const MAX_SPAWN_ATTEMPTS = 10;
+                    
+                    do {
+                        x = canv.width * (0.25 + Math.random() * 0.5);
+                        y = canv.height * (0.25 + Math.random() *0.5);
+                        spawnAttempts++;
+                        
+                        if (spawnAttempts >= MAX_SPAWN_ATTEMPTS) {
+                            x = canv.width / 2;
+                            y = canv.height /2;
+                            break;
+                        }
+                    } while (distBetweenPoints(ship.x, ship.y, x, y) < MONSTER_ASTEROID_SIZE * 2);
+                    
+                    let monsterAsteroid = newAsteroid(x, y, MONSTER_ASTEROID_SIZE);
+                    if (!monsterAsteroid) {
+                        throw new Error('Monster asteroid creation failed');
+                    }
+                    
+                    monsterAsteroid.health = MONSTER_ASTEROID_HEALTH;
+                    if (!monsterAsteroid.offsets || monsterAsteroid.offsets.length === 0) {
+                        monsterAsteroid.offsets = Array(ASTEROID_VERTICES * 2).fill(0.95); 
+                    }
+                    
+                    asteroids.push(monsterAsteroid);
+
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let asteroidX, asteroidY;
+                        spawnAttempts = 0;
+                        
+                        do {
+                            asteroidX = Math.random() * canv.width;
+                            asteroidY = Math.random() * canv.height;
+                            spawnAttempts++;
+                            
+                            if (spawnAttempts >= MAX_SPAWN_ATTEMPTS) {
+                                asteroidX = Math.random() < 0.5 ? ASTEROID_SIZE : canv.width - ASTEROID_SIZE;
+                                asteroidY = Math.random() < 0.5 ? ASTEROID_SIZE : canv.height - ASTEROID_SIZE;
+                                break;
+                            }
+                        } while (
+                            distBetweenPoints(ship.x, ship.y, asteroidX, asteroidY) < ASTEROID_SIZE * 2 ||
+                            distBetweenPoints(x, y, asteroidX, asteroidY) < MONSTER_ASTEROID_SIZE * 1.5
+                        );
+                        
+                        asteroids.push(newAsteroid(asteroidX, asteroidY, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else if (specialLevelType === 'BLACK_HOLE') {
+                    let blackHole = {
+                        x: Math.random() * (canv.width - 200) + 100, 
+                        y: Math.random() * (canv.height - 200) + 100,
+                        particles: [],
+                        outerParticles: [],
+                        angle: 0,
+                        rotationSpeed: 0.001
+                    };
+
+                    for (let i = 0; i < BLACK_HOLE_PARTICLES; i++) {
+                        blackHole.particles.push({
+                            distance: Math.random() * BLACK_HOLE_RADIUS * 2 + BLACK_HOLE_RADIUS,
+                            angle: Math.random() * Math.PI * 2,
+                            speed: Math.random() * BLACK_HOLE_PARTICLE_SPEED + 1,
+                            size: Math.random() * 2 + 1
+                        });
+                    }
+
+                    const OUTER_PARTICLES = 200;
+                    for (let i = 0; i < OUTER_PARTICLES; i++) {
+                        blackHole.outerParticles.push({
+                            distance: BLACK_HOLE_PULL_RADIUS * (0.3 + Math.random() * 0.7),
+                            angle: Math.random() * Math.PI * 2,
+                            baseSpeed: 0.02 + Math.random() * 0.04,
+                            size: 1.5 + Math.random() * 2.5,
+                            alpha: 0.4 + Math.random() * 0.4,
+                            direction: Math.random() < 0.5 ? 1 : -1
+                        });
+                    }
+
+                    window.blackHole = blackHole;
+                    
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let x, y;
+                        do {
+                            x = Math.random() * canv.width;
+                            y = Math.random() * canv.height;
+                        } while (distBetweenPoints(x, y, blackHole.x, blackHole.y) < BLACK_HOLE_RADIUS * 4);
+                        
+                        asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else if (specialLevelType === 'LASER_GRID') {
+                    laserGrid.active = true;
+                    laserGrid.angle = 0;
+                    laserGrid.beams = [];
+                    
+                    for (let i = 0; i < LASER_GRID_BEAMS; i++) {
+                        laserGrid.beams.push({
+                            angle: (i * Math.PI * 2) / LASER_GRID_BEAMS
+                        });
+                    }
+                    
+                    for (let i = 0; i < numAsteroids; i++) {
+                        let x = Math.random() * canv.width;
+                        let y = Math.random() * canv.height;
+                        asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
+                    }
+                } else {
+                    laserGrid.active = false;
+                }
+            } else {
+                let createdAsteroids = 0;
+                let attempts = 0;
+                const MAX_ATTEMPTS = 20;
+
+                while (createdAsteroids < numAsteroids && attempts < MAX_ATTEMPTS) {
+                    let x, y;
+                    do {
+                        x = Math.floor(Math.random() * canv.width);
+                        y = Math.floor(Math.random() * canv.height);
+                        attempts++;
+                    } while (distBetweenPoints(ship.x, ship.y, x, y) < ASTEROID_SIZE * 2 + ship.radius && 
+                            attempts < MAX_ATTEMPTS);
+
+                    let asteroid = newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2));
+                    if (asteroid) {
+                        asteroids.push(asteroid);
+                        createdAsteroids++;
+                    }
+                }
+            }
+        
+            if (asteroids.length === 0) {
+                level++;
+                levelMessageTime = LEVEL_MESSAGE_DURATION;
+                createAsteroidBelt();
+            }
+
+            if (level % 2 === 1) { 
+                enemyShipSpawnTime = Date.now() + 
+                    ENEMY_SPAWN_MIN_DELAY + 
+                    Math.random() * (ENEMY_SPAWN_MAX_DELAY - ENEMY_SPAWN_MIN_DELAY);
+            } else {
+                enemyShipSpawnTime = 0; 
+                enemyShip = null; 
+            }
+
+            if (Math.random() < 0.5) {
+                createBitcoinToken();
+            }
+        }
+
+        function distBetweenPoints(x1, y1, x2, y2) {
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
+
+        function newAsteroid(x, y, r) {
+            let speedMultiplier = r === MONSTER_ASTEROID_SIZE ? 0.15 : 1;
+            let vertexCount = r === MONSTER_ASTEROID_SIZE ? 
+                ASTEROID_VERTICES * 2 : 
+                Math.floor(Math.random() * (ASTEROID_VERTICES + 1) + ASTEROID_VERTICES / 2);
+            
+            let asteroid = {
+                x: x,
+                y: y,
+                xv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1) * speedMultiplier,
+                yv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1) * speedMultiplier,
+                radius: r,
+                angle: Math.random() * Math.PI * 2,
+                vertices: vertexCount,
+                offsets: [],
+                rot: (Math.random() * 0.2 - 0.1) * Math.PI / FPS * (r === MONSTER_ASTEROID_SIZE ? 0.3 : 1),
+                health: r === MONSTER_ASTEROID_SIZE ? MONSTER_ASTEROID_HEALTH : undefined
+            };
+
+            for (let i = 0; i < asteroid.vertices; i++) {
+                if (r === MONSTER_ASTEROID_SIZE) {
+                    asteroid.offsets.push(0.9 + Math.random() * 0.1); 
+                } else {
+                    asteroid.offsets.push(Math.random() * 0.5 + 0.5);
+                }
+            }
+
+            return asteroid;
+        }
+
+        function keyDown(ev) {
+            if (ev.keyCode === 32) {
+                ev.preventDefault();
+            }
+
+            if (gameOverMessageTime > 0) {
+                return;
+            }
+
+            if (ev.keyCode === 80) { 
+                isPaused = !isPaused;
+                pauseOverlay.targetAlpha = isPaused ? 0.5 : 0;
+                if (isPaused) {
+                    stopThrustSound();
+                }
+                return;
+            }
+
+            if (isPaused) {
+                return;
+            }
+
+            if (ship.dead && ship.explodeTime === 0) {
+                if (ev.keyCode === 32) { 
+                    level = 1;
+                    score = 0;
+                    currentMalfunctions.clear(); 
+                    ship = {
+                        x: canv.width / 2,
+                        y: canv.height / 2,
+                        radius: SHIP_SIZE / 2,
+                        angle: 90 / 180 * Math.PI,
+                        rotation: 0,
+                        thrusting: false,
+                        thrust: {
+                            x: 0,
+                            y: 0
+                        },
+                        explodeTime: 0,
+                        dead: false,
+                        lives: GAME_LIVES,
+                        particles: [],
+                        lasers: [],
+                        canShoot: true,
+                        trailPoints: [],
+                        distanceTravelled: 0,
+                        clockwiseRotations: 0,
+                        anticlockwiseRotations: 0,
+                        lastAngle: 90 / 180 * Math.PI,
+                        prevX: canv.width / 2,
+                        prevY: canv.height / 2,
+                        renderX: canv.width / 2,
+                        renderY: canv.height / 2,
+                        thrusterFlicker: 0,
+                        thrusterParticles: [],
+                        invincible: false,
+                        invincibleEndTime: 0,
+                        activePowerUps: new Map(), 
+                        powerUpMessageTime: 0,
+                        lastPowerUp: null,
+                        targetsHit: 0,
+                        bitcoinsCollected: 0,
+                        powerupsCollected: 0,
+                        faultsOccurred: 0,
+                        enemyShipsDestroyed: 0,
+                        respawnEffect: 0,
+                        shotsFired: 0,
+                        repairsCollected: 0,
+                        highestVelocity: 0,
+                    };
+                    createAsteroidBelt();
+                    return;
+                }
+            }
+
+            if (ship.explodeTime > 0) {
+                return;
+            }
+
+            switch(ev.keyCode) {
+                case 32: 
+                    if (currentMalfunctions.has('fire')) {
+                        let currentTime = Date.now();
+                        if (currentTime - lastShotTime < 1000) {
+                            return;
+                        }
+                        lastShotTime = currentTime;
+                    }
+                    shootLaser();
+                    break;
+                case 37: 
+                    let rotationSpeed = TURN_SPEED;
+                    if (currentMalfunctions.has('control')) {
+                        rotationSpeed *= 0.5;
+                    }
+                    ship.rotation = rotationSpeed / 180 * Math.PI / FPS * 
+                        (currentMalfunctions.has('rotation') ? -1 : 1);
+                    break;
+                case 38: 
+                    if (!isWelcomeScreen) {  
+                        if (!ship.thrusting) {
+                            createThrustSound(); 
+                            startThrustSound();  
+                        }
+                        ship.thrusting = true;
+                    }
+                    break;
+                case 39: 
+                    let rotationSpeed2 = TURN_SPEED;
+                    if (currentMalfunctions.has('control')) {
+                        rotationSpeed2 *= 0.5;
+                    }
+                    ship.rotation = -rotationSpeed2 / 180 * Math.PI / FPS * 
+                        (currentMalfunctions.has('rotation') ? -1 : 1);
+                    break;
+            }
+        }
+
+        function keyUp(ev) {
+            if (ship.explodeTime > 0) {
+                return;
+            }
+
+            switch(ev.keyCode) {
+                case 32: // space bar 
+                    ship.canShoot = true;
+                    break;
+                case 37: // left arrow
+                    ship.rotation = 0;
+                    break;
+                case 38: // up arrow 
+                    ship.thrusting = false;
+                    stopThrustSound(); 
+                    break;
+                case 39: // right arrow 
+                    ship.rotation = 0;
+                    break;
+            }
+        }
+
+        function shootLaser() {
+            if (ship.canShoot && ship.lasers.length < LASER_MAX) {
+                createLaserSound();
+                ship.shotsFired++;
+
+                const now = Date.now();
+                const hasRearLaser = ship.activePowerUps.get(POWER_UP_TYPES.REAR_LASER.id) > now;
+                const hasSpreadShot = ship.activePowerUps.get(POWER_UP_TYPES.SPREAD_SHOT.id) > now;
+                const hasLaserBurst = ship.activePowerUps.get(POWER_UP_TYPES.LASER_BURST.id) > now;
+
+                const baseLaser = {
+                    x: ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
+                    y: ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle),
+                    xv: LASER_SPEED * Math.cos(ship.angle) / FPS,
+                    yv: -LASER_SPEED * Math.sin(ship.angle) / FPS,
+                    dist: 0,
+                    explodeTime: 0
+                };
+
+                ship.lasers.push({...baseLaser});
+
+                if (hasRearLaser) {
+                    ship.lasers.push({
+                        x: ship.x - 4 / 3 * ship.radius * Math.cos(ship.angle),
+                        y: ship.y + 4 / 3 * ship.radius * Math.sin(ship.angle),
+                        xv: -LASER_SPEED * Math.cos(ship.angle) / FPS,
+                        yv: LASER_SPEED * Math.sin(ship.angle) / FPS,
+                        dist: 0,
+                        explodeTime: 0
+                    });
+                }
+
+                if (hasSpreadShot) {
+                    const spreadAngles = [-0.2, 0.2];
+                    spreadAngles.forEach(angleOffset => {
+                        ship.lasers.push({
+                            ...baseLaser,
+                            xv: LASER_SPEED * Math.cos(ship.angle + angleOffset) / FPS,
+                            yv: -LASER_SPEED * Math.sin(ship.angle + angleOffset) / FPS
+                        });
+                    });
+                }
+
+                if (hasLaserBurst) {
+                    const BURST_COUNT = 64; 
+                    for (let i = 0; i < BURST_COUNT; i++) {
+                        const burstAngle = (i * Math.PI * 2) / BURST_COUNT;
+                        ship.lasers.push({
+                            x: ship.x,
+                            y: ship.y,
+                            xv: LASER_SPEED * Math.cos(burstAngle) / FPS,
+                            yv: -LASER_SPEED * Math.sin(burstAngle) / FPS,
+                            dist: 200,
+                            explodeTime: 0
+                        });
+                    }
+                }
+
+                ship.canShoot = false;
+                setTimeout(() => {
+                    ship.canShoot = true;
+                }, 25);
+            }
+        }
+
+        function createExplosion(x, y, radius, color, velocity = { x: 0, y: 0 }) {
+            createExplosionSound(radius);
+            
+            let particles = [];
+            let isMonster = radius === MONSTER_ASTEROID_SIZE;
+            let particleCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PARTICLES_LOW : EXPLOSION_PARTICLES_HIGH);
+            let pixelCount = isMonster ? 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH) * 4 : 
+                (isPerformanceMode ? EXPLOSION_PIXELS_LOW : EXPLOSION_PIXELS_HIGH);
             
             for (let i = 0; i < particleCount; i++) {
                 let angle = (i * Math.PI * 2) / particleCount;
@@ -3647,6 +4742,52 @@
             
             ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
             ctx.fillText("FORKLINGS", canv.width / 1.55 + 90, legendY + 5);
+            
+            ctx.fillStyle = "rgb(105, 105, 105)";
+            ctx.font = "16px Arial";
+            ctx.textAlign = "left";
+            
+            ctx.fillStyle = "rgb(65, 65, 65)";
+            ctx.fillRect(canv.width - 60, canv.height - 42, 40, 20);
+            
+            ctx.fillStyle = isPerformanceMode ? "orange" : "rgb(105, 105, 105)";
+            ctx.fillRect(canv.width - (isPerformanceMode ? 40 : 60), canv.height - 42, 20, 20);
+
+            ctx.fillText("PERFORMANCE MODE", canv.width - 245, canv.height - 26);
+
+            if (!window.performanceModeHandler) {
+                window.performanceModeHandler = function(e) {
+                    if (isWelcomeScreen) {
+                        let rect = canv.getBoundingClientRect();
+                        let x = e.clientX - rect.left;
+                        let y = e.clientY - rect.top;
+                        
+                        if (x >= canv.width - 60 && x <= canv.width - 20 &&
+                            y >= canv.height - 42 && y <= canv.height - 22) {
+                            isPerformanceMode = !isPerformanceMode;
+                            localStorage.setItem(PERFORMANCE_MODE_KEY, isPerformanceMode);
+                            
+                            document.body.classList.toggle('grid-enabled', !isPerformanceMode);
+                            
+                            ship.trailPoints = ship.trailPoints.slice(-(isPerformanceMode ? TRAIL_MAX_POINTS_LOW : TRAIL_MAX_POINTS_HIGH));
+                            
+                            explosions = [];
+                            
+                            nebulaClouds = Array(isPerformanceMode ? NEBULA_CLOUDS_LOW : NEBULA_CLOUDS_HIGH).fill().map(() => ({
+                                x: Math.random() * canv.width,
+                                y: Math.random() * canv.height,
+                                radius: 300 + Math.random() * 400,
+                                hue: Math.random() * 360,
+                                alpha: 0.05 + Math.random() * 0.03,
+                                drift: Math.random() * Math.PI * 2
+                            }));
+
+                            starLayers = createStarLayers();
+                        }
+                    }
+                };
+                canv.addEventListener('click', window.performanceModeHandler);
+            }
         }
 
         function wrapText(context, text, x, y, maxWidth, lineHeight) {
@@ -4559,6 +5700,8 @@
                 gameOverMessageTime--;
             }
         }
+
+        document.body.classList.toggle('grid-enabled', !isPerformanceMode);
     </script>
 </body>
 </html>
