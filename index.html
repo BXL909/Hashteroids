@@ -353,7 +353,7 @@
         <table style="margin-top: 2px; margin-right: 0px; width: 1500px; height: auto; align-self: flex-end; border-spacing: 0px; font-size: 12px;">
             <tr>
                 <td style="vertical-align: top; text-align: left; width: 50%;">
-                    <p style="margin: 0; text-align: left;">HASHTEROIDS V1.5</p>
+                    <p style="margin: 0; text-align: left;">HASHTEROIDS V1.55</p>
                     <span style="color: #696969; font-size: 12px; ">YOU ARE PLAYER #<span id="visitorCounter">Loading...</span></span>
                 </td>
                 <td style="vertical-align: top; text-align: right; width: 50%;">
@@ -6257,12 +6257,15 @@
     </script>
 
     <script>
-    (async function() {
+    (function() {
 
-        const NWC_URL   = 'nostr+walletconnect://dc83e108adb2b82eefbe5ac3e37c0e764d3021c0ec166a9e629d5c7af23a4bc8?relay=wss://relay.getalby.com&relay=wss://relay2.getalby.com&secret=b71135c45f041287bf3486b02d3a0f50af94f4110dad549afd41db48234b2c71&lud16=bxl909@getalby.com';
-        const SATS      = 200; 
-        const MEMO      = 'Hashteroids Credit';
+        // ── Config ────────────────────────────────────────────────────────
+        const LIGHTNING_ADDRESS = 'bxl909@coinos.io';
+        const SATS_PER_CREDIT   = 200;
+        const MEMO              = 'Hashteroids Credit';
+        // ─────────────────────────────────────────────────────────────────
 
+        // ── Starfield ─────────────────────────────────────────────────────
         (function() {
             const wrap = document.getElementById('ln-stars');
             const cvs  = document.createElement('canvas');
@@ -6274,10 +6277,8 @@
                 cvs.width  = window.innerWidth;
                 cvs.height = window.innerHeight;
                 stars = Array.from({length:100}, () => ({
-                    x: Math.random()*cvs.width,
-                    y: Math.random()*cvs.height,
-                    r: Math.random()*1.1+0.2,
-                    s: Math.random()*0.4+0.05
+                    x: Math.random()*cvs.width, y: Math.random()*cvs.height,
+                    r: Math.random()*1.1+0.2,   s: Math.random()*0.4+0.05
                 }));
             }
             function draw() {
@@ -6285,9 +6286,8 @@
                 cx.clearRect(0,0,cvs.width,cvs.height);
                 const t = Date.now();
                 stars.forEach(s => {
-                    cx.beginPath();
-                    cx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-                    cx.fillStyle = `rgba(255,255,255,${0.25+Math.sin(t*s.s*0.008)*0.25})`;
+                    cx.beginPath(); cx.arc(s.x,s.y,s.r,0,Math.PI*2);
+                    cx.fillStyle=`rgba(255,255,255,${0.25+Math.sin(t*s.s*0.008)*0.25})`;
                     cx.fill();
                 });
                 requestAnimationFrame(draw);
@@ -6296,267 +6296,12 @@
             resize(); draw();
         })();
 
-        function hex(bytes) {
-            return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
-        }
-        function unhex(h) {
-            const a = new Uint8Array(h.length/2);
-            for (let i=0;i<h.length;i+=2) a[i/2]=parseInt(h.slice(i,i+2),16);
-            return a;
-        }
-        function utf8(str) { return new TextEncoder().encode(str); }
+        // ── Credits persistence ───────────────────────────────────────────
+        const CREDITS_KEY = 'hashteroidsCredits';
+        window.gameCredits  = parseInt(localStorage.getItem(CREDITS_KEY) || '0', 10);
+        window.saveCredits  = () => localStorage.setItem(CREDITS_KEY, window.gameCredits);
 
-        const nwcParsed = new URL(NWC_URL.replace('nostr+walletconnect://','https://'));
-        const walletPubkey = nwcParsed.hostname;
-        const relays       = nwcParsed.searchParams.getAll('relay');
-        const secretHex    = nwcParsed.searchParams.get('secret');
-
-        async function importPrivKey(hexKey) {
-            return hexKey; 
-        }
-
-        const P  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
-        const Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
-        const Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
-        const N  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-
-        function modp(a) { return ((a % P) + P) % P; }
-        function modn(a) { return ((a % N) + N) % N; }
-        function modInv(a, m) {
-            let [old_r, r] = [((a % m) + m) % m, m], [old_s, s] = [1n, 0n];
-            while (r !== 0n) {
-                const q = old_r / r;
-                [old_r, r] = [r, old_r - q*r];
-                [old_s, s] = [s, old_s - q*s];
-            }
-            return ((old_s % m) + m) % m;
-        }
-        function pointAdd(P1, P2) {
-            if (P1 === null) return P2;
-            if (P2 === null) return P1;
-            const [x1,y1] = P1, [x2,y2] = P2;
-            if (x1 === x2) {
-                if (y1 !== y2) return null;
-                const lam = modp(modp(3n*x1*x1) * modInv(2n*y1, P));
-                const x3 = modp(lam*lam - 2n*x1);
-                return [x3, modp(lam*(x1-x3) - y1)];
-            }
-            const lam = modp(modp(y2-y1) * modInv(x2-x1, P));
-            const x3 = modp(lam*lam - x1 - x2);
-            return [x3, modp(lam*(x1-x3) - y1)];
-        }
-        function pointMul(k, point) {
-            let result = null, addend = point;
-            while (k > 0n) {
-                if (k & 1n) result = pointAdd(result, addend);
-                addend = pointAdd(addend, addend);
-                k >>= 1n;
-            }
-            return result;
-        }
-        function getSharedSecret(privHex, pubHex) {
-            const priv = BigInt('0x'+privHex);
-            const prefix = pubHex.slice(0,2);
-            const xb = BigInt('0x'+pubHex.slice(2,66));
-            let y;
-            if (prefix === '02' || prefix === '03') {
-                const ySquared = modp(xb*xb*xb + 7n);
-                y = modp(powmod(ySquared, (P+1n)/4n, P));
-                if ((y & 1n) !== (prefix === '03' ? 1n : 0n)) y = P - y;
-            } else {
-                y = BigInt('0x'+pubHex.slice(66,130));
-            }
-            const shared = pointMul(priv, [xb, y]);
-            return shared[0].toString(16).padStart(64,'0');
-        }
-        function powmod(base, exp, mod) {
-            let result = 1n; base = base % mod;
-            while (exp > 0n) {
-                if (exp & 1n) result = result * base % mod;
-                exp >>= 1n; base = base * base % mod;
-            }
-            return result;
-        }
-
-        async function nip04Encrypt(privHex, pubHex, plaintext) {
-            const sharedHex = getSharedSecret(privHex, '02'+pubHex);
-            const sharedKey = await crypto.subtle.importKey('raw', unhex(sharedHex), {name:'AES-CBC'}, false, ['encrypt']);
-            const iv = crypto.getRandomValues(new Uint8Array(16));
-            const ct = await crypto.subtle.encrypt({name:'AES-CBC', iv}, sharedKey, utf8(plaintext));
-            return btoa(String.fromCharCode(...new Uint8Array(ct))) + '?iv=' + btoa(String.fromCharCode(...iv));
-        }
-        async function nip04Decrypt(privHex, pubHex, ciphertext) {
-            const [ct, ivPart] = ciphertext.split('?iv=');
-            const sharedHex = getSharedSecret(privHex, '02'+pubHex);
-            const sharedKey = await crypto.subtle.importKey('raw', unhex(sharedHex), {name:'AES-CBC'}, false, ['decrypt']);
-            const iv  = Uint8Array.from(atob(ivPart), c => c.charCodeAt(0));
-            const ctb = Uint8Array.from(atob(ct),     c => c.charCodeAt(0));
-            const pt  = await crypto.subtle.decrypt({name:'AES-CBC', iv}, sharedKey, ctb);
-            return new TextDecoder().decode(pt);
-        }
-
-        async function sha256(data) {
-            return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
-        }
-
-        const _tagCache = {};
-        async function taggedHash(tag, data) {
-            if (!_tagCache[tag]) {
-                const h = await sha256(utf8(tag));
-                _tagCache[tag] = new Uint8Array([...h, ...h]);
-            }
-            const out = new Uint8Array(_tagCache[tag].length + data.length);
-            out.set(_tagCache[tag]); out.set(data, _tagCache[tag].length);
-            return sha256(out);
-        }
-
-        function concat(...arrays) {
-            const total = arrays.reduce((n, a) => n + a.length, 0);
-            const out = new Uint8Array(total);
-            let off = 0;
-            for (const a of arrays) { out.set(a, off); off += a.length; }
-            return out;
-        }
-
-        function n2b(n) { return unhex(n.toString(16).padStart(64, '0')); }
-
-        async function schnorrSign(messageHex, privHex) {
-            const privInt = BigInt('0x' + privHex);
-            const m       = unhex(messageHex);
-
-            const Pt = pointMul(privInt, [Gx, Gy]);
-            const d  = (Pt[1] & 1n) !== 0n ? N - privInt : privInt;
-            const px = n2b(Pt[0]);
-            const db = n2b(d);
-
-            const aux     = crypto.getRandomValues(new Uint8Array(32));
-            const auxHash = await taggedHash('BIP0340/aux', aux);
-            const t = new Uint8Array(32);
-            for (let i = 0; i < 32; i++) t[i] = db[i] ^ auxHash[i];
-
-            const k0Hash = await taggedHash('BIP0340/nonce', concat(t, px, m));
-            let k0 = modn(BigInt('0x' + hex(k0Hash)));
-            if (k0 === 0n) k0 = 1n;
-
-            const R = pointMul(k0, [Gx, Gy]);
-            const k = (R[1] & 1n) !== 0n ? N - k0 : k0;
-            const rx = n2b(R[0]);
-
-            const eHash = await taggedHash('BIP0340/challenge', concat(rx, px, m));
-            const e = modn(BigInt('0x' + hex(eHash)));
-
-            const s = modn(k + e * d);
-
-            return hex(rx) + hex(n2b(s));
-        }
-
-        async function getPubkey(privHex) {
-            const priv = BigInt('0x' + privHex);
-            const pub  = pointMul(priv, [Gx, Gy]);
-            return pub[0].toString(16).padStart(64, '0');
-        }
-        async function createEvent(privHex, kind, content, tags=[]) {
-            const pubkey = await getPubkey(privHex);
-            const created_at = Math.floor(Date.now()/1000);
-            const arr = [0, pubkey, created_at, kind, tags, content];
-            const idBytes = await sha256(utf8(JSON.stringify(arr)));
-            const id  = hex(idBytes);
-            const sig = await schnorrSign(id, privHex);
-            return {id, pubkey, created_at, kind, tags, content, sig};
-        }
-
-        function nwcRequest(method, params) {
-            return new Promise(async (resolve, reject) => {
-                let resolved = false;
-                let timer;
-
-                const payload   = JSON.stringify({method, params});
-                const appPubkey = await getPubkey(secretHex);
-                const encrypted = await nip04Encrypt(secretHex, walletPubkey, payload);
-                const event     = await createEvent(secretHex, 23194, encrypted, [['p', walletPubkey]]);
-                const subId     = hex(crypto.getRandomValues(new Uint8Array(8)));
-
-
-                function done(result, err) {
-                    if (resolved) return;
-                    resolved = true;
-                    clearTimeout(timer);
-                    sockets.forEach(ws => { try { ws.close(); } catch(e){} });
-                    if (err) reject(err); else resolve(result);
-                }
-
-                timer = setTimeout(() => done(null, new Error('NWC timeout')), 30000);
-
-                const sockets = relays.map(relay => {
-                    const ws = new WebSocket(relay);
-
-                    ws.onopen = () => {
-                        ws.send(JSON.stringify(['REQ', subId, {
-                            kinds: [23195],
-                            authors: [walletPubkey],
-                            '#p': [appPubkey],
-                            since: Math.floor(Date.now()/1000) - 10
-                        }]));
-                        ws.send(JSON.stringify(['EVENT', event]));
-                    };
-
-                    ws.onmessage = async (e) => {
-                        if (resolved) return;
-                        let msg;
-                        try { msg = JSON.parse(e.data); } catch { return; }
-
-                        if (msg[0] === 'NOTICE') console.warn('[NWC] NOTICE:', msg[1]);
-                        if (msg[0] === 'OK')   
-                        if (msg[0] !== 'EVENT') return;
-
-                        const ev = msg[2];
-                        if (ev.kind !== 23195) return;
-                        
-
-                        const refersToUs = ev.tags.some(t => t[0]==='e' && t[1]===event.id)
-                                        || ev.tags.some(t => t[0]==='p' && t[1]===appPubkey);
-                        if (!refersToUs) { console.log('[NWC] ignoring - not for us'); return; }
-
-                        try {
-                            const plain = await nip04Decrypt(secretHex, walletPubkey, ev.content);
-                        
-                            const resp = JSON.parse(plain);
-                            if (resp.error) done(null, new Error(resp.error.message || 'NWC error'));
-                            else done(resp.result);
-                        } catch(ex) { console.error('[NWC] decrypt error:', ex); }
-                    };
-
-                    ws.onerror = (e) => console.error('[NWC] socket error on:', relay, e);
-                    return ws;
-                });
-            });
-        }
-
-        let _activePaymentHash = null; // only the current invoice's hash is "live"
-
-        function pollPayment(paymentHash, creditsToAdd) {
-            _activePaymentHash = paymentHash;
-            if (lnPolling) clearInterval(lnPolling);
-            lnPolling = setInterval(async () => {
-                if (paymentHash !== _activePaymentHash) {
-                    clearInterval(lnPolling); lnPolling = null; return;
-                }
-                try {
-                    const r = await nwcRequest('lookup_invoice', {payment_hash: paymentHash});
-                    if (paymentHash !== _activePaymentHash) {
-                        return;
-                    }
-                    if (r && (r.preimage || r.settled_at || r.state === 'settled')) {
-                        clearInterval(lnPolling); lnPolling = null;
-                        gameCredits += creditsToAdd;
-                        saveCredits();
-                        setStatus('⚡ PAID! ' + creditsToAdd + (creditsToAdd === 1 ? ' CREDIT' : ' CREDITS') + ' ADDED!', 'paid');
-                        setTimeout(() => lnCloseModal(), 2000);
-                    }
-                } catch(e) { console.log('[PAY] Poll error:', e.message); }
-            }, 3500);
-        }
-
+        // ── UI helpers ────────────────────────────────────────────────────
         let currentInvoice = '';
         window.lnCopy = function() {
             if (!currentInvoice) return;
@@ -6566,43 +6311,37 @@
                 setTimeout(() => btn.textContent = 'COPY INVOICE', 2000);
             });
         };
-
         function setStatus(msg, cls) {
             const el = document.getElementById('ln-status');
-            el.textContent = msg;
-            el.className = cls || '';
+            el.textContent = msg; el.className = cls || '';
         }
 
-        const CREDITS_KEY = 'hashteroidsCredits';
-        window.gameCredits = parseInt(localStorage.getItem(CREDITS_KEY) || '0', 10);
-        window.saveCredits = () => localStorage.setItem(CREDITS_KEY, gameCredits);
-
+        // ── Modal open/close ──────────────────────────────────────────────
         let lnQty = 1;
-        let lnPolling = null;
+        let _activeVerifyUrl  = null;
+        let _pollInterval     = null;
+        let _invoiceGen       = 0;
 
         window.lnOpenModal = function() {
             lnQty = 1;
             updateQtyDisplay();
-            document.getElementById('ln-spinner-wrap').style.display = 'none';
-            document.getElementById('ln-content').style.display      = 'none';
-            document.getElementById('ln-confirm-row').style.display  = 'flex';
-            document.getElementById('ln-paywall').style.display      = 'flex';
+            document.getElementById('ln-spinner-wrap').style.display  = 'none';
+            document.getElementById('ln-content').style.display       = 'none';
+            document.getElementById('ln-confirm-row').style.display   = 'flex';
+            document.getElementById('ln-paywall').style.display       = 'flex';
         };
 
         window.lnCloseModal = function() {
-            _activePaymentHash = null;
-            if (lnPolling) { clearInterval(lnPolling); lnPolling = null; }
-            if (window._lnQtyTimer) { clearTimeout(window._lnQtyTimer); window._lnQtyTimer = null; }
+            _activeVerifyUrl = null;
+            if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
             const pw = document.getElementById('ln-paywall');
             pw.classList.add('fade-out');
             setTimeout(() => {
-                pw.style.display = 'none';
-                pw.classList.remove('fade-out');
+                pw.style.display = 'none'; pw.classList.remove('fade-out');
                 document.getElementById('ln-confirm-row').style.display = 'flex';
-                document.getElementById('ln-content').style.display = 'none';
+                document.getElementById('ln-content').style.display     = 'none';
                 document.getElementById('ln-spinner-wrap').style.display = 'none';
-                lnQty = 1;
-                updateQtyDisplay();
+                lnQty = 1; updateQtyDisplay();
             }, 450);
         };
 
@@ -6612,55 +6351,211 @@
         };
 
         window.lnConfirm = function() {
-            document.getElementById('ln-confirm-row').style.display  = 'none';
-            document.getElementById('ln-spinner-wrap').style.display = 'flex';
-            document.getElementById('ln-content').style.display      = 'none';
+            document.getElementById('ln-confirm-row').style.display   = 'none';
+            document.getElementById('ln-spinner-wrap').style.display  = 'flex';
+            document.getElementById('ln-content').style.display       = 'none';
             generateInvoice();
         };
 
         function updateQtyDisplay() {
+            const sats = lnQty * SATS_PER_CREDIT;
             document.getElementById('ln-qty-num').textContent   = lnQty;
             document.getElementById('ln-qty-label').textContent = lnQty === 1 ? 'CREDIT' : 'CREDITS';
-            document.getElementById('ln-qty-sats').textContent  = (lnQty * SATS) + ' SATS';
+            document.getElementById('ln-qty-sats').textContent  = sats + ' SATS';
         }
 
-        let _invoiceGeneration = 0;
+        function unlockCredits(qty) {
+            window.gameCredits += qty;
+            window.saveCredits();
+            setStatus('⚡ PAID! ' + qty + (qty === 1 ? ' CREDIT' : ' CREDITS') + ' ADDED!', 'paid');
+            setTimeout(() => lnCloseModal(), 2000);
+        }
 
+        // ── LNURL-pay invoice generation ──────────────────────────────────
         async function generateInvoice() {
-            const myGen = ++_invoiceGeneration;
-            const qtySnapshot = lnQty;
+            const myGen = ++_invoiceGen;
+            const qtySnap = lnQty;
+            const millisats = qtySnap * SATS_PER_CREDIT * 1000;
+
             try {
-                const totalSats = qtySnapshot * SATS;
-                const result = await nwcRequest('make_invoice', {
-                    amount: totalSats * 1000,
-                    description: MEMO + (qtySnapshot > 1 ? ` x${qtySnapshot}` : '')
-                });
+                // Step 1: Resolve lightning address → LNURL metadata
+                const [user, domain] = LIGHTNING_ADDRESS.split('@');
+                const metaUrl = `https://${domain}/.well-known/lnurlp/${user}`;
+                const metaRes = await fetch(metaUrl);
+                if (!metaRes.ok) throw new Error('Could not reach ' + domain);
+                const meta = await metaRes.json();
+                if (meta.status === 'ERROR') throw new Error(meta.reason || 'LNURL error');
+                if (millisats < meta.minSendable || millisats > meta.maxSendable)
+                    throw new Error(`Amount out of range (${meta.minSendable/1000}–${meta.maxSendable/1000} sats)`);
 
-                if (myGen !== _invoiceGeneration) return;
+                // Step 2: Request invoice from callback
+                const callbackUrl = meta.callback +
+                    (meta.callback.includes('?') ? '&' : '?') +
+                    `amount=${millisats}&comment=${encodeURIComponent(MEMO + (qtySnap > 1 ? ' x' + qtySnap : ''))}`;
+                const invRes = await fetch(callbackUrl);
+                if (!invRes.ok) throw new Error('Invoice request failed');
+                const inv = await invRes.json();
+                if (inv.status === 'ERROR') throw new Error(inv.reason || 'Invoice error');
+                if (!inv.pr) throw new Error('No invoice in response');
 
-                currentInvoice = result.invoice || result.payment_request;
-                if (!currentInvoice) throw new Error('No invoice returned');
-                const paymentHash = result.payment_hash;
+                if (myGen !== _invoiceGen) return; // superseded
 
+                currentInvoice = inv.pr;
+
+                // Show invoice UI
                 document.getElementById('ln-spinner-wrap').style.display = 'none';
                 document.getElementById('ln-content').style.display      = 'block';
-                document.getElementById('ln-paying-for').textContent     = (qtySnapshot * SATS) + ' SATS  →  ' + qtySnapshot + (qtySnapshot === 1 ? ' CREDIT' : ' CREDITS');
-                document.getElementById('ln-invoice-txt').textContent    = currentInvoice.slice(0,58)+'…';
-                document.getElementById('ln-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=' + encodeURIComponent('lightning:'+currentInvoice);
+                document.getElementById('ln-paying-for').textContent     =
+                    (qtySnap * SATS_PER_CREDIT) + ' SATS  →  ' + qtySnap +
+                    (qtySnap === 1 ? ' CREDIT' : ' CREDITS');
+                document.getElementById('ln-invoice-txt').textContent    = currentInvoice.slice(0,58) + '…';
+                document.getElementById('ln-qr').src =
+                    'https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=' +
+                    encodeURIComponent('lightning:' + currentInvoice);
                 document.getElementById('ln-wallet-btn').style.display   = 'block';
-                document.getElementById('ln-wallet-btn').onclick         = () => window.location.href = 'lightning:'+currentInvoice;
+                document.getElementById('ln-wallet-btn').onclick         =
+                    () => window.location.href = 'lightning:' + currentInvoice;
                 setStatus('WAITING FOR PAYMENT...', 'waiting');
 
-                pollPayment(paymentHash, qtySnapshot);
+                // Step 3: use verify URL if provided, otherwise decode bolt11
+                if (inv.verify) {
+                    // Coinos may return a verify URL directly — use it
+                    pollViaVerifyUrl(inv.verify, qtySnap);
+                } else {
+                    const paymentHash = decodeBolt11PaymentHash(currentInvoice);
+                    if (paymentHash) {
+                        pollViaWoS(paymentHash, qtySnap);
+                    } else {
+                        showManualConfirmButton(qtySnap);
+                    }
+                }
 
             } catch(err) {
-                if (myGen !== _invoiceGeneration) return;
+                if (myGen !== _invoiceGen) return;
                 console.error('Invoice error:', err);
-                document.getElementById('ln-spinner-wrap').innerHTML =
-                    `<div style="color:#ff4444;font-size:0.78rem;letter-spacing:0.12em">CONNECTION ERROR<br>
-                     <span style="color:rgba(255,255,255,0.35);font-size:0.62rem;letter-spacing:0.05em">${err.message}</span></div>`;
+                const wrap = document.getElementById('ln-spinner-wrap');
+                wrap.style.display = 'flex';
+                document.getElementById('ln-content').style.display = 'none';
+                wrap.innerHTML = `<div style="color:#ff4444;font-size:0.78rem;letter-spacing:0.12em">
+                    CONNECTION ERROR<br>
+                    <span style="color:rgba(255,255,255,0.35);font-size:0.62rem">${err.message}</span>
+                    <br><br><button onclick="lnCloseModal()" style="background:transparent;border:1px solid rgba(255,165,0,0.4);color:#ffa500;font-family:monospace;font-size:0.65rem;padding:0.3rem 0.8rem;cursor:pointer;margin-top:0.5rem">CANCEL</button>
+                    </div>`;
             }
         }
+
+        // ── Decode payment_hash from bolt11 (no library needed) ─────────
+        function decodeBolt11PaymentHash(bolt11) {
+            // bolt11 is bech32-encoded. The payment hash is a 32-byte (256-bit)
+            // tagged field with type 0x01. We find it by scanning the data part.
+            try {
+                const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+                const lower = bolt11.toLowerCase();
+                // Find the separator (last '1' before the 90-char checksum tail)
+                const sep = lower.lastIndexOf('1');
+                if (sep < 0) return null;
+                const dataPart = lower.slice(sep + 1, -6); // strip 6-char checksum
+                // Convert bech32 chars to 5-bit groups
+                const data5 = [];
+                for (const ch of dataPart) {
+                    const v = CHARSET.indexOf(ch);
+                    if (v < 0) return null;
+                    data5.push(v);
+                }
+                // Skip first 7 items (timestamp is 35 bits = 7 x 5-bit groups)
+                // Then scan tagged fields: type(5) len(5) len(5) data(len*5 bits)
+                let pos = 7;
+                while (pos + 2 < data5.length) {
+                    const type = data5[pos];
+                    const len  = data5[pos+1] * 32 + data5[pos+2];
+                    pos += 3;
+                    if (type === 1 && len === 52) {
+                        // Payment hash: 52 x 5-bit groups = 260 bits, take first 256
+                        const bits = data5.slice(pos, pos + 52);
+                        // Convert 5-bit groups to bytes
+                        let buf = 0, bufLen = 0;
+                        const bytes = [];
+                        for (const b of bits) {
+                            buf = (buf << 5) | b;
+                            bufLen += 5;
+                            if (bufLen >= 8) {
+                                bytes.push((buf >> (bufLen - 8)) & 0xff);
+                                bufLen -= 8;
+                            }
+                        }
+                        return bytes.slice(0,32).map(b=>b.toString(16).padStart(2,'0')).join('');
+                    }
+                    pos += len;
+                }
+                return null;
+            } catch(e) { return null; }
+        }
+
+        // ── Poll Coinos invoice API ───────────────────────────────────────
+        // Coinos has CORS headers on their API — no proxy needed.
+        // Their verify endpoint: GET https://coinos.io/api/invoice/<payment_hash>
+        // Returns: { received: <millisats> } when paid, { received: 0 } when unpaid
+        function pollViaWoS(paymentHash, qty) { // name kept for compatibility
+            _activeVerifyUrl = paymentHash;
+            if (_pollInterval) clearInterval(_pollInterval);
+
+            const expectedMsat = qty * SATS_PER_CREDIT * 1000;
+            const apiUrl = `https://coinos.io/api/invoice/${paymentHash}`;
+
+            _pollInterval = setInterval(async () => {
+                if (paymentHash !== _activeVerifyUrl) {
+                    clearInterval(_pollInterval); _pollInterval = null; return;
+                }
+                try {
+                    const res  = await fetch(apiUrl, { headers: { Accept: 'application/json' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (paymentHash !== _activeVerifyUrl) return;
+                    // Coinos returns { received: <millisats> } — non-zero means paid
+                    if (data.received && data.received >= expectedMsat) {
+                        clearInterval(_pollInterval); _pollInterval = null;
+                        unlockCredits(qty);
+                    }
+                } catch(e) { /* keep polling */ }
+            }, 3000);
+        }
+
+        // ── Poll via a direct verify URL (LNURL-verify spec) ────────────
+        function pollViaVerifyUrl(verifyUrl, qty) {
+            _activeVerifyUrl = verifyUrl;
+            if (_pollInterval) clearInterval(_pollInterval);
+
+            _pollInterval = setInterval(async () => {
+                if (verifyUrl !== _activeVerifyUrl) {
+                    clearInterval(_pollInterval); _pollInterval = null; return;
+                }
+                try {
+                    const res  = await fetch(verifyUrl, { headers: { Accept: 'application/json' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (verifyUrl !== _activeVerifyUrl) return;
+                    if (data.settled || data.preimage) {
+                        clearInterval(_pollInterval); _pollInterval = null;
+                        unlockCredits(qty);
+                    }
+                } catch(e) { /* keep polling */ }
+            }, 3000);
+        }
+
+        // ── Manual fallback if hash decode fails ──────────────────────────
+        function showManualConfirmButton(qty) {
+            const statusEl = document.getElementById('ln-status');
+            statusEl.innerHTML =
+                'PAY INVOICE ABOVE, THEN: ' +
+                '<button onclick="window._manualConfirm(' + qty + ')" ' +
+                'style="background:#ffa500;border:none;color:#000;font-family:monospace;' +
+                'font-size:0.7rem;padding:0.2rem 0.6rem;cursor:pointer;margin-left:0.4rem">' +
+                "I'VE PAID</button>";
+        }
+        window._manualConfirm = function(qty) {
+            if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+            unlockCredits(qty);
+        };
 
     })();
     </script>
